@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ecovacs T90S Patch",
+        "description": "Meldet den DEEBOT T90S PRO OMNI (298z64) bei der eingebauten Ecovacs-Integration an, bis die offizielle Unterstützung kommt, und lädt die Ecovacs-Integration danach neu."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Ist bereits eingerichtet."
+    }
+  }
+}

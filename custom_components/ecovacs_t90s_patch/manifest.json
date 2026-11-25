@@ -1,0 +1,14 @@
+{
+  "domain": "ecovacs_t90s_patch",
+  "name": "Ecovacs T90S Patch",
+  "after_dependencies": ["ecovacs"],
+  "codeowners": ["@doclenke"],
+  "config_flow": true,
+  "documentation": "https://github.com/doclenke/ha-ecovacs-t90s-patch",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/doclenke/ha-ecovacs-t90s-patch/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}
