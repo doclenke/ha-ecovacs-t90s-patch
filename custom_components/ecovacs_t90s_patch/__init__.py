@@ -72,9 +72,70 @@ def _apply_patch() -> list[str]:
     return patched
 
 
+def _map_outline_v2_native() -> bool:
+    """Return True if deebot-client already accepts map outlines with outlineVer 2."""
+    from deebot_client.message import HandlingState
+    from deebot_client.messages.json.map import OnMapInfoV2
+
+    class _Bus:
+        def notify(self, *args: object, **kwargs: object) -> None:
+            pass
+
+    try:
+        result = OnMapInfoV2._handle_body_data_dict(  # noqa: SLF001
+            _Bus(), {"outlineVer": "2", "mid": "0", "info": ""}
+        )
+    except Exception:  # noqa: BLE001
+        return False
+    return result.state == HandlingState.SUCCESS
+
+
+def _apply_map_fix() -> str:
+    """Accept map outlines with outlineVer 2.
+
+    The T90S sends getMapInfo_V2 / onMapInfo_V2 with outlineVer "2". The payload
+    has the same layout as version 1 (outline, rooms, block lines), but
+    deebot-client only accepts "1" and drops everything else, so no map image is
+    ever generated. Treat "2" like "1".
+    """
+    from deebot_client.messages.json.map import OnMapInfoV2
+
+    if getattr(OnMapInfoV2, "_t90s_outline_v2", False):
+        return "already"
+    if _map_outline_v2_native():
+        return "native"
+
+    original = OnMapInfoV2.__dict__["_handle_body_data_dict"].__func__
+
+    def _handle_body_data_dict(cls, event_bus, data):  # noqa: ANN001, ANN202
+        if isinstance(data, dict) and data.get("outlineVer") == "2":
+            data = {**data, "outlineVer": "1"}
+        return original(cls, event_bus, data)
+
+    OnMapInfoV2._handle_body_data_dict = classmethod(_handle_body_data_dict)  # noqa: SLF001
+    OnMapInfoV2._t90s_outline_v2 = True  # noqa: SLF001
+    return "patched"
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the patch."""
+    try:
+        map_fix = await hass.async_add_executor_job(_apply_map_fix)
+    except Exception:
+        _LOGGER.exception("Could not patch the map outline handling of deebot-client")
+        map_fix = "failed"
+    if map_fix == "patched":
+        _LOGGER.warning("Map outlines with outlineVer 2 are now accepted (temporary patch)")
+
     if await hass.async_add_executor_job(_official_support_available):
+        if map_fix != "native":
+            # Device class is known now, but the map still needs the fix: keep running.
+            _LOGGER.warning(
+                "deebot-client supports %s natively now; the patch still fixes the map (%s)",
+                ", ".join(PATCHED_CLASSES),
+                map_fix,
+            )
+            return True
         _LOGGER.warning(
             "deebot-client supports %s natively now; this patch is no longer "
             "needed and can be removed",
@@ -83,9 +144,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         persistent_notification.async_create(
             hass,
             "Die eingebaute Ecovacs-Integration unterstützt den DEEBOT T90S PRO "
-            "OMNI jetzt selbst. Der Patch macht nichts mehr und kann entfernt "
-            "werden: Integration „Ecovacs T90S Patch“ löschen und im Marketplace "
-            "deinstallieren.",
+            "OMNI jetzt selbst, inklusive Karte. Der Patch macht nichts mehr und "
+            "kann entfernt werden: Integration „Ecovacs T90S Patch“ löschen und im "
+            "Marketplace deinstallieren.",
             title="Ecovacs T90S Patch nicht mehr nötig",
             notification_id=NOTIFICATION_ID,
         )
